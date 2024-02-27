@@ -17,10 +17,6 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
-app.use(cors({
-    origin: 'https://smart-brain-frontend-omega.vercel.app/'
-  }));
-
 app.get('/',(req,res) =>{
     res.send('success');
 })
