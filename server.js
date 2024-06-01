@@ -1,132 +1,101 @@
 const express = require("express");
-const bcrypt = require('bcrypt-nodejs');
+const bcrypt = require('bcrypt');
 const cors = require('cors');
-const knex = require('knex');
+const mongoose = require('mongoose');
+require('dotenv').config();
 
-const db = knex({
-    client: 'pg',
-    connection: {
-      host : '127.0.0.1',
-      user : 'postgres',
-      password : 'Mallick@123',
-      database : 'smart-brain'
-    }
-  });
+//connected with mongodb with database name face-recog and collection name is users in mongodb atlas
 
+const PORT = process.env.PORT || 3000;
 const app = express();
 
 app.use(express.json());
 app.use(cors());
 
-
-app.get('/',(req,res) =>{
-    res.send('success');
+mongoose.connect(process.env.CONNECTION_STRING, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 })
+.then(() => console.log('MongoDB connected'))
+.catch(err => console.error('MongoDB connection error:', err));
 
-/*signin database code*/
-
-app.post('/signin' , (req,res)=>{
-    db.select('email','hash').from('login')
-    .where('email', '=', req.body.email)
-    .then(data =>{
-        const isValid = bcrypt.compareSync(req.body.password,data[0].hash);
-        if(isValid){
-            return db.select('*').from('users')
-            .where('email', '=', req.body.email)
-            .then(user =>{
-                res.json(user[0]);
-            })
-            .catch(err=>{
-                res.status(404).json("unable to get user ")
-            })
-        }
-        else{
-            res.status(404).json("wrong credentials")
-        }
-    })
-    .catch(err=>{
-        res.status(404).json("wrong credentials")
-})
-})
-
-/*register database code*/
-
-app.post('/register',(req,res)=>{
-    const { email, password , name } = req.body;
-    const hash = bcrypt.hashSync(password);
-    db.transaction(trx=>{
-        trx.insert({
-            hash:hash,
-            email:email
-        })
-        .into('login')
-        .returning('email')
-
-        .then(loginEmail =>{
-            return trx('users')
-    .returning('*')
-    .insert({
-        email:loginEmail[0].email,
-        name: name,
-        joined: new Date()
-    }).then(user =>{
-        res.json(user[0]);
-    })
-        })
-        .then(trx.commit)
-        .catch(trx.rollback)
-    })
-    .catch(err =>
-        res.status(404).json('user already exists'))
-    
-})
-
-
-/*get user profile*/
-
-app.get('/profile/:id' , (req,res)=>{
-    const {id} = req.params;
-    let found = false;
-    db.select('*').from('users').where({id:id})
-    .then(user=>{
-        if(user.length)
-        {
-        res.json(user[0]);
-        }
-        else{
-            res.status(404).json("user not found")
-        }
-    })
-    .catch(err => res.status(404).json(err))
-})
-
-/*image count put*/
-
-app.put('/image',(req,res)=>{
-    const {id} = req.body;
-    db('users').where('id','=', id)
-    .increment('entries',1)
-    .returning('entries')
-    .then(entries =>{
-        res.json(entries[0].entries);
-    })
-    .catch(err =>{
-        res.status(404).json("unable to get entries")
-    })
-})
-
-/*for password
-bcrypt.hash("bacon", null, null, function(err, hash) {
-    // Store hash in your password DB.
-});*/
-/*
-// Load hash from your password DB.
-bcrypt.compare("bacon", hash, function(err, res) {
-    // res == true
+const userSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  password: String,
+  joined: { type: Date, default: Date.now },
+  entries: { type: Number, default: 0 }
 });
-bcrypt.compare("veggies", hash, function(err, res) {
-    // res = false
-});*/
-app.listen(3000, ()=>{
-    console.log("app is running on port 3000")
+
+const User = mongoose.model('User', userSchema);
+
+app.get('/', (req, res) => {
+  res.send('success');
+});
+
+app.post('/signin', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(401).json({ message: 'All fields are mandatory' });
+  }
+  try {
+    const user = await User.findOne({ email });
+    if (user && bcrypt.compareSync(password, user.password)) {
+      return res.status(200).json({ id: user._id, name: user.name, email: user.email, entries: user.entries });
+    } else {
+      return res.status(400).json({ message: 'User and password are not valid' });
+    }
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/register', async (req, res) => {
+  const { email, password, name } = req.body;
+  const hash = bcrypt.hashSync(password, 10);
+  try {
+    const newUser = new User({
+      name,
+      email,
+      password: hash
+    });
+    const savedUser = await newUser.save();
+    res.status(201).json({ id: savedUser._id, name: savedUser.name, email: savedUser.email, entries: savedUser.entries });
+  } catch (err) {
+    res.status(400).json('Unable to register');
+  }
+});
+
+app.get('/profile/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await User.findById(id);
+    if (user) {
+      res.json(user);
+    } else {
+      res.status(404).json("User not found");
+    }
+  } catch (err) {
+    res.status(500).json("Error getting user");
+  }
+});
+
+app.put('/image', async (req, res) => {
+  const { id } = req.body;
+  try {
+    const user = await User.findById(id);
+    if (user) {
+      user.entries += 1;
+      const updatedUser = await user.save();
+      res.json(updatedUser.entries);
+    } else {
+      res.status(404).json("User not found");
+    }
+  } catch (err) {
+    res.status(500).json("Unable to get entries");
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`App is running on port ${PORT}`);
 });
