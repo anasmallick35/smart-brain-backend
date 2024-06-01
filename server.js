@@ -11,15 +11,10 @@ const app = express();
 
 app.use(express.json());
 app.use(cors());
-<<<<<<< HEAD
 
 mongoose.connect(process.env.CONNECTION_STRING, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-=======
-app.get('/',(req,res) =>{
-    res.send('success');
->>>>>>> f968783d74b71e2192ae41da30fc7b6dc128183f
 })
 .then(() => console.log('MongoDB connected'))
 .catch(err => console.error('MongoDB connection error:', err));
@@ -104,12 +99,3 @@ app.put('/image', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`App is running on port ${PORT}`);
 });
-<<<<<<< HEAD
-=======
-bcrypt.compare("veggies", hash, function(err, res) {
-    // res = false
-});*/
-app.listen(3000, ()=>{
-    console.log("app is running on port 3000")
-});
->>>>>>> f968783d74b71e2192ae41da30fc7b6dc128183f
